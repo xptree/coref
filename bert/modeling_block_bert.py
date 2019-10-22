@@ -208,8 +208,9 @@ class BertModel(object):
             dropout_prob=config.hidden_dropout_prob)
 
       # we want to pad the input sequence so that its length is dividable by block_size
-      input_mask = tf.concat([input_mask, tf.zeros(shape=[batch_size, padding_length])], axis=1)
-      self.embedding_output = tf.concat([self.embedding_output, tf.zeros(shape=[batch_size, padding_length, config.hidden_size])], axis=1)
+      input_mask = tf.concat([input_mask, tf.zeros(shape=[batch_size, padding_length], dtype=tf.int32)], axis=1)
+      padded_embedding_output = tf.concat([self.embedding_output, tf.zeros(shape=[batch_size, padding_length, config.hidden_size])], axis=1)
+      padded_embedding_output = tf.reshape(padded_embedding_output, [batch_size, config.block_size, sequence_length_with_padding // config.block_size, config.hidden_size])
 
       with tf.variable_scope("encoder"):
         # This converts a 2D mask of shape [batch_size, seq_length] to a 3D
@@ -225,7 +226,7 @@ class BertModel(object):
         # Run the stacked transformer.
         # `sequence_output` shape = [batch_size, seq_length, hidden_size].
         self.all_encoder_layers = transformer_model(
-            input_tensor=self.embedding_output,
+            input_tensor=padded_embedding_output,
             attention_mask=extended_attention_mask,
             hidden_size=config.hidden_size,
             num_hidden_layers=config.num_hidden_layers,
@@ -841,6 +842,7 @@ def transformer_model(input_tensor,
   # `attention_mask` = [B, K, A, 1, T/K]
 
   identity = tf.range(start=0, limit=block_size, delta=1)
+  permutation = None
   if head_offsets is not None:
     if all(offset % block_size == 0 for offset in head_offsets):
       permutation = None
@@ -850,6 +852,7 @@ def transformer_model(input_tensor,
       permutation = (identity + tf.constant(head_offsets)) % block_size
       permutation = permutation * num_attention_heads + tf.range(start=0, limit=num_attention_heads, delta=1)
 
+  print("permutation", permutation)
   # The Transformer performs sum residuals on all layers so the input needs
   # to be the same as the hidden size.
   if input_width != hidden_size:
@@ -881,8 +884,8 @@ def transformer_model(input_tensor,
               initializer_range=initializer_range,
               do_return_2d_tensor=False,
               batch_size=batch_size,
-              from_seq_length=seq_length_per_block,
-              to_seq_length=seq_length_per_block,
+              from_seq_length_per_block=seq_length_per_block,
+              to_seq_length_per_block=seq_length_per_block,
               block_size=block_size,
               permutation=permutation)
           attention_heads.append(attention_head)
