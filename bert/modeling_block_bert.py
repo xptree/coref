@@ -42,7 +42,8 @@ class BertConfig(object):
                max_position_embeddings=512,
                type_vocab_size=16,
                initializer_range=0.02,
-               block_size=2):
+               block_size=2,
+               head_offsets=None):
     """Constructs BertConfig.
 
     Args:
@@ -80,7 +81,7 @@ class BertConfig(object):
     self.initializer_range = initializer_range
     self.block_size = block_size
     self.layer_offsets = None
-    self.head_offsets = None
+    self.head_offsets = head_offsets
 
   @classmethod
   def from_dict(cls, json_object):

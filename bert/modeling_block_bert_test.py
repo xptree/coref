@@ -48,7 +48,9 @@ class BertModelTest(tf.test.TestCase):
                  max_position_embeddings=512,
                  type_vocab_size=16,
                  initializer_range=0.02,
-                 scope="bert"):
+                 scope="bert",
+                 block_size=2,
+                 head_offsets=[0, 0, 1, 1]):
       self.parent = parent
       self.batch_size = batch_size
       self.seq_length = seq_length
@@ -67,6 +69,8 @@ class BertModelTest(tf.test.TestCase):
       self.type_vocab_size = type_vocab_size
       self.initializer_range = initializer_range
       self.scope = scope
+      self.block_size = block_size
+      self.head_offsets = head_offsets
 
     def create_model(self):
       input_ids = BertModelTest.ids_tensor([self.batch_size, self.seq_length],
@@ -93,7 +97,9 @@ class BertModelTest(tf.test.TestCase):
           attention_probs_dropout_prob=self.attention_probs_dropout_prob,
           max_position_embeddings=self.max_position_embeddings,
           type_vocab_size=self.type_vocab_size,
-          initializer_range=self.initializer_range)
+          initializer_range=self.initializer_range,
+          block_size=self.block_size,
+          head_offsets=self.head_offsets)
 
       model = modeling.BertModel(
           config=config,
