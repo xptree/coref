@@ -43,7 +43,8 @@ class BertConfig(object):
                type_vocab_size=16,
                initializer_range=0.02,
                block_size=2,
-               head_offsets=None):
+               head_offsets=None,
+               layer_offsets=None):
     """Constructs BertConfig.
 
     Args:
@@ -80,7 +81,7 @@ class BertConfig(object):
     self.type_vocab_size = type_vocab_size
     self.initializer_range = initializer_range
     self.block_size = block_size
-    self.layer_offsets = None
+    self.layer_offsets = layer_offsets
     self.head_offsets = head_offsets
 
   @classmethod
@@ -170,11 +171,15 @@ class BertModel(object):
     # if not is_training:
       # config.hidden_dropout_prob = 0.0
       # config.attention_probs_dropout_prob = 0.0
-
+    print("input_ids", input_ids)
     input_shape = get_shape_list(input_ids, expected_rank=2)
     batch_size = input_shape[0]
+    print("batch_size", batch_size)
     sequence_length_exact = input_shape[1]
-    sequence_length_with_padding = math.ceil(sequence_length_exact / config.block_size) * config.block_size
+    print(sequence_length_exact, type(sequence_length_exact))
+    sequence_length_with_padding = tf.math.ceil(sequence_length_exact / config.block_size) * config.block_size
+    sequence_length_with_padding = tf.dtypes.cast(sequence_length_with_padding, dtype=tf.int32)
+    print(sequence_length_with_padding, type(sequence_length_with_padding))
     padding_length = sequence_length_with_padding - sequence_length_exact
 
     if input_mask is None:
@@ -212,6 +217,7 @@ class BertModel(object):
       input_mask = tf.concat([input_mask, tf.zeros(shape=[batch_size, padding_length], dtype=tf.int32)], axis=1)
       padded_embedding_output = tf.concat([self.embedding_output, tf.zeros(shape=[batch_size, padding_length, config.hidden_size])], axis=1)
       padded_embedding_output = tf.reshape(padded_embedding_output, [batch_size, config.block_size, sequence_length_with_padding // config.block_size, config.hidden_size])
+      print("padded_embedding_output", padded_embedding_output)
 
       with tf.variable_scope("encoder"):
         # This converts a 2D mask of shape [batch_size, seq_length] to a 3D
@@ -220,7 +226,7 @@ class BertModel(object):
         #  attention_mask = create_attention_mask_from_input_mask(
         #      input_ids_with_padding, input_mask)
 
-        attention_mask = tf.reshape(input_mask, [batch_size, config.block_size, -1])
+        attention_mask = tf.reshape(input_mask, [batch_size, config.block_size, sequence_length_with_padding // config.block_size])
         extended_attention_mask = tf.expand_dims(tf.expand_dims(attention_mask, axis=2), axis=3)
         # B x K x 1 x 1 x N/block
 
@@ -241,7 +247,8 @@ class BertModel(object):
             head_offsets=config.head_offsets)
 
       #  self.sequence_output = self.all_encoder_layers[-1]
-      self.sequence_output = tf.reshape(self.all_encoder_layers[-1], [batch_size, sequence_length_with_padding, -1])[:, :sequence_length_exact, :]
+      self.sequence_output = tf.reshape(self.all_encoder_layers[-1], [batch_size, sequence_length_with_padding, config.hidden_size])[:, 0:sequence_length_exact, :]
+      print(self.sequence_output)
 
       # The "pooler" converts the encoded sequence tensor of shape
       # [batch_size, seq_length, hidden_size] to a tensor of shape
@@ -252,6 +259,7 @@ class BertModel(object):
         # We "pool" the model by simply taking the hidden state corresponding
         # to the first token. We assume that this has been pre-trained
         first_token_tensor = tf.squeeze(self.sequence_output[:, 0:1, :], axis=1)
+        print(first_token_tensor, type(first_token_tensor))
         self.pooled_output = tf.layers.dense(
             first_token_tensor,
             config.hidden_size,

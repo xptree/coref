@@ -16,8 +16,9 @@ import conll
 import metrics
 import optimization
 from bert import tokenization
-from bert import modeling
 from pytorch_to_tf import load_from_pytorch_checkpoint
+from bert import modeling
+from bert import modeling_block_bert
 
 
 class CorefModel(object):
@@ -29,7 +30,12 @@ class CorefModel(object):
     self.subtoken_maps = {}
     self.gold = {}
     self.eval_data = None # Load eval data lazily.
-    self.bert_config = modeling.BertConfig.from_json_file(config["bert_config_file"])
+    if 'block' in config["init_checkpoint"]:
+      print("setup BlockBert config")
+      self.bert_config = modeling_block_bert.BertConfig.from_json_file(config["bert_config_file"])
+    else:
+      print("setup Bert config")
+      self.bert_config = modeling.BertConfig.from_json_file(config["bert_config_file"])
     self.tokenizer = tokenization.FullTokenizer(
                 vocab_file=config['vocab_file'], do_lower_case=False)
 
@@ -56,7 +62,12 @@ class CorefModel(object):
     tvars = tf.trainable_variables()
     # If you're using TF weights only, tf_checkpoint and init_checkpoint can be the same
     # Get the assignment map from the tensorflow checkpoint. Depending on the extension, use TF/Pytorch to load weights.
-    assignment_map, initialized_variable_names = modeling.get_assignment_map_from_checkpoint(tvars, config['tf_checkpoint'])
+    if 'block' in config["init_checkpoint"]:
+      print("setup BlockBert assignment map")
+      assignment_map, initialized_variable_names = modeling_block_bert.get_assignment_map_from_checkpoint(tvars, config['tf_checkpoint'])
+    else:
+      print("setup Bert assignment map")
+      assignment_map, initialized_variable_names = modeling.get_assignment_map_from_checkpoint(tvars, config['tf_checkpoint'])
     init_from_checkpoint = tf.train.init_from_checkpoint if config['init_checkpoint'].endswith('ckpt') else load_from_pytorch_checkpoint
     init_from_checkpoint(config['init_checkpoint'], assignment_map)
     print("**** Trainable Variables ****")
@@ -247,13 +258,25 @@ class CorefModel(object):
 
 
   def get_predictions_and_loss(self, input_ids, input_mask, text_len, speaker_ids, genre, is_training, gold_starts, gold_ends, cluster_ids, sentence_map):
-    model = modeling.BertModel(
-      config=self.bert_config,
-      is_training=is_training,
-      input_ids=input_ids,
-      input_mask=input_mask,
-      use_one_hot_embeddings=False,
-      scope='bert')
+
+    if 'block' in self.config["init_checkpoint"]:
+      print("setup BlockBert model")
+      model = modeling_block_bert.BertModel(
+        config=self.bert_config,
+        is_training=is_training,
+        input_ids=input_ids,
+        input_mask=input_mask,
+        use_one_hot_embeddings=False,
+        scope='bert')
+    else:
+      print("setup Bert model")
+      model = modeling.BertModel(
+        config=self.bert_config,
+        is_training=is_training,
+        input_ids=input_ids,
+        input_mask=input_mask,
+        use_one_hot_embeddings=False,
+        scope='bert')
     all_encoder_layers = model.get_all_encoder_layers()
     mention_doc = model.get_sequence_output()
 

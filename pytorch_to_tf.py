@@ -13,6 +13,7 @@ tensors_to_transpose = (
     )
 
 var_map = (
+    ('decoder.bert', 'bert'),
     ('layer.', 'layer_'),
     ('word_embeddings.weight', 'word_embeddings'),
     ('position_embeddings.weight', 'position_embeddings'),
@@ -37,6 +38,8 @@ def my_convert_keys(model):
 
 def load_from_pytorch_checkpoint(checkpoint, assignment_map):
     pytorch_model = torch.load(checkpoint, map_location='cpu')
+    if 'model' in pytorch_model:
+      pytorch_model = pytorch_model['model']
     pt_model_with_tf_keys = my_convert_keys(pytorch_model)
     for _, name in assignment_map.items():
         store_vars = vs._get_default_variable_store()._vars
